@@ -1,0 +1,2368 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskFlow - Workspace Project Management</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .google-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #1e293b;
+      background-color: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      text-decoration: none !important;
+      margin: 2px 3px;
+      vertical-align: middle;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .google-chip:hover {
+      background-color: #e2e8f0;
+      border-color: #94a3b8;
+    }
+    
+    .rich-editor ul { list-style-type: disc; padding-left: 1.25rem; }
+    .rich-editor ol { list-style-type: decimal; padding-left: 1.25rem; }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+
+<body class="h-full font-sans text-slate-800 antialiased flex bg-[#f8fafc] overflow-hidden">
+
+  <div id="authGateOverlay" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-200 relative overflow-hidden">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+        </div>
+        <h2 id="authGateTitle" class="text-xl font-bold text-slate-900 tracking-tight">Sign in</h2>
+        <p id="authGateSubtitle" class="text-xs text-slate-500 mt-1">Access your team boards, tasks, and sprint deliverables</p>
+      </div>
+
+      <div class="flex p-1 bg-slate-100 rounded-xl mb-5">
+        <button id="authTabSignIn" onclick="setAuthMode('signin')" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-xs transition">Sign In</button>
+        <button id="authTabSignUp" onclick="setAuthMode('signup')" class="flex-1 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition">Create Account</button>
+      </div>
+
+      <form id="authGateForm" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Email address</label>
+          <input type="email" id="authGateEmail" required placeholder="you@company.com" class="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+          <input type="password" id="authGatePassword" required placeholder="••••••••" class="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+        </div>
+
+        <button type="submit" id="authGateSubmitBtn" class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl shadow-xs transition flex items-center justify-center space-x-2">
+          <span id="authGateSubmitText">Sign In</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <aside id="appSidebar" class="w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 z-20 select-none transition-all duration-300">
+    <div class="h-14 px-3 border-b border-slate-200 flex items-center justify-between">
+      <div class="flex items-start space-x-2.5 min-w-0 flex-1">
+        <button id="workspaceIconBtn" onclick="openIconPicker('workspace')" class="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0 hover:ring-2 hover:ring-brand-400 transition focus:outline-none relative group/wsicon cursor-pointer" title="Click to customize workspace icon">
+          <span id="workspaceIconDisplay" class="flex items-center justify-center w-full h-full"></span>
+          <div class="absolute inset-0 bg-black/25 opacity-0 group-hover/wsicon:opacity-100 flex items-center justify-center rounded-lg transition">
+            <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+          </div>
+        </button>
+        <div class="min-w-0 flex-1 flex flex-col justify-between h-8">
+          <div class="flex items-center group/wsname leading-none">
+            <span id="workspaceNameEl" contenteditable="true" spellcheck="false" class="-ml-1 px-1 py-0 font-semibold text-slate-900 text-xs tracking-tight truncate block rounded hover:bg-slate-100/80 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500 leading-none border border-transparent hover:border-slate-200">Workspace</span>
+          </div>
+          <div class="flex items-center group/wsdesc leading-none">
+            <span id="workspaceDescEl" contenteditable="true" spellcheck="false" class="-ml-1 px-1 py-0 text-[10px] text-slate-400 truncate block rounded hover:bg-slate-100/80 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500 leading-none border border-transparent hover:border-slate-200">TaskFlow Hub</span>
+          </div>
+        </div>
+      </div>
+      <button onclick="toggleSidebarCollapse()" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" title="Hide Sidebar ([)">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+      </button>
+    </div>
+
+    <div class="p-3 space-y-1">
+      <button onclick="switchView('board')" id="navBtn-board" class="w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-50 text-brand-700 transition shadow-2xs">
+        <div class="flex items-center space-x-2.5">
+          <svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+          <span>Board View</span>
+        </div>
+      </button>
+
+      <button onclick="switchView('myTasks')" id="navBtn-myTasks" class="w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+        <div class="flex items-center space-x-2.5">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+          <span>My Tasks</span>
+        </div>
+      </button>
+
+      <button onclick="switchView('calendar')" id="navBtn-calendar" class="w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 transition">
+        <div class="flex items-center space-x-2.5">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          <span>Calendar</span>
+        </div>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2 border-t border-slate-100">
+      <div class="flex items-center justify-between px-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <span>Boards</span>
+        <button onclick="promptCreateNewBoard()" id="sidebarNewBoardBtn" class="p-1 hover:text-brand-600 rounded hover:bg-slate-100 transition" title="Create New Board">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        </button>
+      </div>
+      <div id="sidebarBoardsList" class="space-y-0.5"></div>
+    </div>
+
+    <div class="p-3 border-t border-slate-200 bg-slate-50/60 flex items-center justify-between">
+      <button onclick="openTeamModal()" class="flex items-center space-x-2 min-w-0 p-1 rounded-lg hover:bg-slate-100 transition text-left group flex-1 mr-1">
+        <div id="sidebarUserAvatar" class="w-7 h-7 rounded-full bg-brand-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">AR</div>
+        <div class="min-w-0 flex-1">
+          <span id="sidebarUserName" class="text-xs font-medium text-slate-800 truncate block leading-tight">Alex Rivera</span>
+          <span id="sidebarUserRole" class="text-[9px] font-semibold text-brand-600 uppercase tracking-wider block mt-0.5 leading-none">Admin</span>
+        </div>
+      </button>
+      <button onclick="handleLogout()" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Sign Out">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 px-5 py-2.5 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.03)] shrink-0">
+      <div class="flex items-center space-x-3">
+        <button id="sidebarExpandBtn" onclick="toggleSidebarCollapse()" class="hidden p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition" title="Show Sidebar ([)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+
+        <div id="headerBoardMeta" class="flex items-start space-x-3">
+          <button id="boardIconBtn" onclick="openIconPicker('board')" class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center text-white shadow-sm font-bold text-sm hover:ring-2 hover:ring-brand-400 hover:ring-offset-1 transition relative overflow-hidden focus:outline-none shrink-0" title="Click to customize board icon">
+            <span id="boardIconDisplay" class="flex items-center justify-center w-full h-full"></span>
+          </button>
+
+          <div class="flex flex-col justify-between h-9">
+            <div class="flex items-center space-x-1.5 leading-none">
+              <h1 id="projectTitle" class="-ml-1.5 px-1.5 py-0.5 font-semibold text-slate-900 text-[15px] tracking-tight hover:bg-slate-100/80 rounded cursor-pointer transition border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 leading-none" contenteditable="true" spellcheck="false" title="Click to rename board">Sprint Planning & Delivery</h1>
+            </div>
+            <div class="flex items-center leading-none">
+              <p id="projectDescription" class="-ml-1.5 px-1.5 py-0.5 text-[11px] text-slate-400 hover:text-slate-600 font-normal leading-none hover:bg-slate-100/80 rounded cursor-pointer transition border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 max-w-sm sm:max-w-md truncate" contenteditable="true" spellcheck="false" title="Click to edit board description">Google Workspace • Unified Project Tracker</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="headerSpecialMeta" class="hidden items-center space-x-2">
+          <h2 id="specialViewTitle" class="text-[15px] font-semibold text-slate-900 tracking-tight">My Tasks</h2>
+          <span id="specialViewSubtitle" class="text-xs text-slate-400">• Personal assigned workflow</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="relative">
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="Filter tasks & subtasks..." class="pl-8 pr-3 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 w-36 sm:w-48 bg-slate-50 focus:bg-white transition">
+        </div>
+
+        <div class="relative">
+          <select id="boardStatusFilterSelect" onchange="setFilter(this.value)" class="text-xs bg-slate-50 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-slate-700 font-medium focus:ring-1 focus:ring-brand-500 focus:outline-none transition cursor-pointer">
+            <option value="all">Status: All</option>
+            <option value="incomplete">Status: Incomplete</option>
+            <option value="complete">Status: Completed</option>
+          </select>
+        </div>
+
+        <div id="boardActionBtns" class="flex items-center space-x-2">
+          <button onclick="openAIAssistantModal()" class="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-indigo-200 rounded-lg text-xs font-medium text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100/90 hover:border-indigo-300 transition shadow-2xs cursor-pointer group" title="AI Sprint Brief & Project Decomposition">
+            <svg class="w-3.5 h-3.5 text-indigo-600 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>AI Assistant</span>
+          </button>
+
+          <button id="headerAddSectionBtn" onclick="promptAddSection()" class="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition shadow-xs" title="Add Section">
+            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Add Section</span>
+          </button>
+
+          <button onclick="addNewTaskQuick()" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-medium transition shadow-xs cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>New Task</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
+      <!-- VIEW 1: Main Board -->
+      <div id="viewContainerBoard" class="space-y-6">
+        <div id="sectionsListContainer" class="space-y-6"></div>
+
+        <div id="blankCanvasPlaceholder" class="text-center py-16 px-4 bg-white rounded-2xl border border-dashed border-slate-300 max-w-xl mx-auto my-8 shadow-xs">
+          <div class="w-14 h-14 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-brand-100 shadow-inner">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </div>
+          <h3 class="text-base font-semibold text-slate-800">Your board is clean</h3>
+          <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+            Click <strong class="text-slate-700">Add Section</strong> or <strong class="text-slate-700">New Task</strong> above to get started.
+          </p>
+          <div class="mt-5 flex items-center justify-center space-x-3">
+            <button onclick="promptAddSection()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition shadow-xs">Add Section</button>
+            <button onclick="addNewTaskQuick()" class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium transition shadow-xs">New Task</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: My Tasks -->
+      <div id="viewContainerMyTasks" class="hidden space-y-6">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-xs p-4 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div id="myTasksUserBadge" class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center">AR</div>
+            <div>
+              <h2 id="myTasksHeading" class="text-sm font-semibold text-slate-900">Tasks assigned to you</h2>
+              <p class="text-xs text-slate-400">All tasks and subtasks assigned to your profile</p>
+            </div>
+          </div>
+          <button onclick="addNewTaskQuick()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-medium transition shadow-xs">+ Add Task</button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div class="grid grid-cols-12 gap-3 px-4 py-2.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase border-b border-slate-200 bg-slate-50/70">
+            <div class="col-span-5">Task / Subtask Name</div>
+            <div class="col-span-2">Board / Context</div>
+            <div class="col-span-2">Status</div>
+            <div class="col-span-2">Due Date</div>
+            <div class="col-span-1 text-right">Actions</div>
+          </div>
+          <div id="myTasksListContainer" class="divide-y divide-slate-100"></div>
+        </div>
+      </div>
+
+      <!-- VIEW 3: Calendar -->
+      <div id="viewContainerCalendar" class="hidden space-y-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1">
+              <button onclick="calendarPrevMonth()" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition">◄</button>
+              <button onclick="calendarToday()" class="px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">Today</button>
+              <button onclick="calendarNextMonth()" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition">►</button>
+            </div>
+            <h2 id="calendarMonthLabel" class="text-sm font-semibold text-slate-900 tracking-tight"></h2>
+          </div>
+
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1.5">
+              <span class="text-xs text-slate-500 font-medium">Member:</span>
+              <select id="calendarMemberFilter" onchange="handleCalendarMemberChange(this.value)" class="text-xs bg-slate-50 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:ring-1 focus:ring-brand-500 focus:outline-none cursor-pointer"></select>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <span class="text-xs text-slate-500 font-medium">Status:</span>
+              <select id="calendarStatusFilter" onchange="handleCalendarStatusChange(this.value)" class="text-xs bg-slate-50 hover:bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:ring-1 focus:ring-brand-500 focus:outline-none cursor-pointer">
+                <option value="all">All Statuses</option>
+                <option value="incomplete">Incomplete</option>
+                <option value="complete">Completed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div class="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 text-center text-xs font-semibold text-slate-500 py-2">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div id="calendarDaysGrid" class="grid grid-cols-7 divide-x divide-y divide-slate-100"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="drawerBackdrop" class="fixed inset-0 bg-slate-900/30 z-40 backdrop-blur-xs transition-opacity duration-200 hidden" onclick="closeTaskDrawer()"></div>
+  <aside id="taskDrawer" class="fixed top-0 right-0 bottom-0 w-full sm:w-[540px] lg:w-[620px] bg-white z-50 shadow-2xl border-l border-slate-200 flex flex-col transform translate-x-full transition-all duration-300 ease-in-out">
+    <div id="drawerBreadcrumb" class="hidden px-4 py-2 bg-indigo-50 border-b border-indigo-100 items-center justify-between text-xs text-indigo-800">
+      <div class="flex items-center space-x-1.5 min-w-0">
+        <span class="font-medium text-slate-400">Task:</span>
+        <span id="drawerParentTaskTitle" class="font-semibold truncate max-w-xs text-indigo-900"></span>
+      </div>
+      <button onclick="backToParentTask()" class="text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline">
+        ← Back to Parent Task
+      </button>
+    </div>
+
+    <div class="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/60" ondblclick="toggleTaskDrawerExpand()">
+      <div class="flex items-center space-x-2">
+        <div id="drawerStatusPills" class="flex flex-wrap items-center gap-1.5"></div>
+        <button onclick="openStatusDropdown(state.activeTaskId, event)" class="px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 border border-brand-200 rounded-md font-medium transition">
+          + Status
+        </button>
+        <span class="text-xs text-slate-400">|</span>
+        <span id="drawerSectionBadge" class="text-xs text-slate-500 font-medium px-2 py-0.5 bg-slate-100 rounded border border-slate-200">To Do</span>
+      </div>
+      <div class="flex items-center space-x-1">
+        <button id="drawerExpandBtn" onclick="toggleTaskDrawerExpand()" title="Toggle Full Window" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition">
+          <svg id="drawerExpandIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        </button>
+        <button onclick="deleteActiveTask()" title="Delete Task" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        </button>
+        <button onclick="closeTaskDrawer()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-5 space-y-6">
+      <div>
+        <input type="text" id="drawerTaskTitle" oninput="updateActiveTaskTitle(this.value)" placeholder="Task title..." class="w-full text-lg font-semibold text-slate-900 border-0 border-b border-transparent hover:border-slate-200 focus:border-brand-500 focus:ring-0 focus:outline-none pb-1 transition">
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-xs">
+        <div>
+          <label class="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Assignees</label>
+          <div id="drawerAssigneesDisplay" class="flex flex-wrap items-center gap-1"></div>
+        </div>
+        <div id="drawerSectionSelectCol">
+          <label class="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Section</label>
+          <select id="drawerSectionSelect" onchange="updateActiveTaskSection(this.value)" class="w-full text-xs bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 focus:ring-1 focus:ring-brand-500 focus:outline-none"></select>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider">Start Date</label>
+            <button id="drawerClearStartDateBtn" onclick="clearActiveTaskStartDate()" class="text-[9px] text-slate-400 hover:text-rose-500 transition hidden">Clear</button>
+          </div>
+          <input type="date" id="drawerStartDateInput" onchange="updateActiveTaskStartDate(this.value)" class="w-full text-xs bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 focus:ring-1 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Due / End Date</label>
+          <input type="date" id="drawerDueDateInput" onchange="updateActiveTaskDueDate(this.value)" class="w-full text-xs bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 focus:ring-1 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Recurrence</label>
+          <div id="drawerRecurrenceContainer"></div>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Description</h4>
+          <button id="aiEnhanceDescBtn" type="button" onclick="aiEnhanceTaskDescription()" class="inline-flex items-center space-x-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50/70 hover:bg-indigo-100 px-2 py-0.5 rounded-md border border-indigo-200 transition">
+            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>✨ AI Polish Scope</span>
+          </button>
+        </div>
+        <div id="drawerRichEditor" contenteditable="true" oninput="handleEditorInput()" class="rich-editor min-h-[120px] max-h-[200px] overflow-y-auto p-3 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white leading-relaxed"></div>
+      </div>
+
+      <div id="drawerSubtasksContainer" class="space-y-3 pt-2 border-t border-slate-100">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <h4 class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Subtasks</h4>
+            <span id="drawerSubtaskCounterBadge" class="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">0/0</span>
+          </div>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <div id="drawerSubtaskProgressBar" class="bg-brand-600 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <div id="drawerSubtasksList" class="space-y-2"></div>
+        <div class="flex items-center space-x-2 pt-1">
+          <input type="text" id="newSubtaskInput" placeholder="+ Add a subtask (press Enter)..." onkeydown="if(event.key === 'Enter'){ addSubtaskToActiveTask(); }" class="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500">
+          <button onclick="addSubtaskToActiveTask()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition shadow-xs">Add Subtask</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="teamPermissionsModal" class="fixed inset-0 bg-slate-900/40 z-50 backdrop-blur-xs hidden items-center justify-center p-4" onclick="handleTeamModalBackdrop(event)">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 sm:p-6 border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center font-bold">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900">User Settings & Workspace</h3>
+            <p class="text-[11px] text-slate-400">Account session and team members</p>
+          </div>
+        </div>
+        <button onclick="closeTeamModal()" class="p-1 text-slate-400 hover:text-slate-600 rounded transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1">
+        <!-- Active User Account Card -->
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div id="modalUserAvatar" class="w-9 h-9 rounded-full bg-brand-600 text-white font-bold text-xs flex items-center justify-center">AR</div>
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span id="modalUserName" class="text-xs font-semibold text-slate-800">Alex Rivera</span>
+                <span id="modalUserRole" class="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-brand-100 text-brand-700">Admin</span>
+              </div>
+              <span id="modalUserEmail" class="text-[11px] text-slate-500 block">alex.rivera@gmail.com</span>
+            </div>
+          </div>
+          <button type="button" onclick="handleLogout()" class="px-2.5 py-1 text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition font-medium">
+            Sign Out
+          </button>
+        </div>
+
+        <!-- Team Roster -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">Team Roster</label>
+            <span id="teamMemberCountBadge" class="text-[10px] text-slate-400 font-medium"></span>
+          </div>
+          <div id="teamMembersList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
+        </div>
+
+        <div id="addMemberAdminSection" class="pt-2 border-t border-slate-100 space-y-2">
+          <div class="flex items-center space-x-2">
+            <input type="text" id="newMemberNameInput" placeholder="New member name..." class="flex-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+            <select id="newMemberRoleSelect" class="text-xs px-2 py-1.5 border border-slate-200 rounded-lg bg-white text-slate-700 font-medium">
+              <option value="collaborator">Collaborator</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button onclick="addTeamMemberWithRole()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-medium transition shadow-2xs whitespace-nowrap">+ Add Member</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="aiAssistantModal" class="fixed inset-0 bg-slate-900/40 z-50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-5 sm:p-6 border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0 mb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900">TaskFlow AI Assistant</h3>
+            <p class="text-[11px] text-slate-400">Powered by Gemini 3 Flash • Sprint Summaries & Natural Language Planning</p>
+          </div>
+        </div>
+        <button onclick="closeAIAssistantModal()" class="p-1 text-slate-400 hover:text-slate-600 rounded transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="flex items-center space-x-2 border-b border-slate-200/80 mb-4 pb-2 shrink-0">
+        <button id="aiTabBtn-standup" onclick="switchAIAssistantTab('standup')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 transition">
+          📊 Sprint Brief & Standup
+        </button>
+        <button id="aiTabBtn-planner" onclick="switchAIAssistantTab('planner')" class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">
+          🚀 Natural Language Project Planner
+        </button>
+      </div>
+
+      <div id="aiTabContent-standup" class="flex-1 overflow-y-auto space-y-4 pr-1">
+        <p class="text-xs text-slate-500">
+          Generate an executive sprint update and daily standup summary analyzing your active board's progress, pending milestones, and open tasks.
+        </p>
+        <div class="flex items-center space-x-2">
+          <button id="aiGenerateStandupBtn" onclick="aiGenerateSprintSummary()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shadow-2xs inline-flex items-center space-x-1.5">
+            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>Generate Executive Standup</span>
+          </button>
+          <button id="aiCopyStandupBtn" onclick="copyAIBriefText()" class="hidden px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-medium text-slate-700 transition">
+            📋 Copy Brief
+          </button>
+        </div>
+        <div id="aiStandupOutput" class="hidden min-h-[140px] p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 whitespace-pre-line leading-relaxed font-sans"></div>
+      </div>
+
+      <div id="aiTabContent-planner" class="hidden flex-1 overflow-y-auto space-y-4 pr-1">
+        <p class="text-xs text-slate-500">
+          Describe any feature, launch, or initiative in plain English. Gemini will automatically break it down into organized tasks and subtasks for your board.
+        </p>
+        <div class="space-y-2">
+          <textarea id="aiPlannerInput" rows="3" placeholder="e.g. Plan an end-to-end user onboarding flow including interactive product tour, welcome email cadence, and analytics event tracking..." class="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"></textarea>
+          <div class="flex justify-end">
+            <button id="aiRunPlannerBtn" onclick="aiRunProjectPlanGenerator()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shadow-2xs inline-flex items-center space-x-1.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <span>Generate Project Plan</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="aiPlanPreviewContainer" class="hidden space-y-3 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-800">Generated Task Breakdown</span>
+            <button onclick="aiApplyPlanToActiveBoard()" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-medium transition shadow-2xs">
+              + Import All Into Board
+            </button>
+          </div>
+          <div id="aiPlanTasksList" class="space-y-2 max-h-52 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="customModal" class="fixed inset-0 bg-slate-900/40 z-50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-5 border border-slate-200 space-y-4">
+      <div>
+        <h3 id="modalTitle" class="text-sm font-semibold text-slate-900">Dialog</h3>
+        <p id="modalDesc" class="text-xs text-slate-500 mt-0.5">Please enter a name.</p>
+      </div>
+      <input type="text" id="modalTextInput" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-600" onkeydown="if(event.key === 'Enter'){ handleModalConfirm(); }">
+      <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeCustomModal()" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-medium">Cancel</button>
+        <button onclick="handleModalConfirm()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="assigneeDropdownMenu" class="fixed bg-white border border-slate-200 rounded-xl shadow-xl py-2 px-1 z-50 text-xs w-56 hidden">
+    <div class="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1 flex items-center justify-between">
+      <span>Assign Members</span>
+      <button onclick="closeAssigneeDropdown()" class="text-slate-400 hover:text-slate-600">✕</button>
+    </div>
+    <div id="assigneeItemsList" class="max-h-48 overflow-y-auto space-y-0.5 px-1"></div>
+  </div>
+
+  <div id="statusDropdownMenu" class="fixed bg-white border border-slate-200 rounded-xl shadow-2xl py-2 px-2 z-50 hidden text-xs w-64">
+    <div class="px-1.5 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1.5 flex items-center justify-between">
+      <span>Select Status</span>
+      <button onclick="closeStatusDropdown()" class="text-slate-400 hover:text-slate-600">✕</button>
+    </div>
+    <div id="statusItemsList" class="max-h-52 overflow-y-auto space-y-1 pr-0.5"></div>
+  </div>
+
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <script>
+    const STORAGE_KEY = 'TASKFLOW_WORKSPACE_V3';
+    const SESSION_KEY = 'TASKFLOW_ACTIVE_SESSION';
+
+    const SUPABASE_URL = "https://xyiqmhpnmlvviduqyxok.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aXFtaHBubWx2dmlkdXF5eG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NDYyODUsImV4cCI6MjEwNzQyMjI4NX0.yPt4dggw0IJcIsb-6pEFl6WlLAKQTQmiGOrQwdpAqvU";
+
+    const supabaseClient = (window.supabase && window.supabase.createClient)
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    let supabaseUser = null;
+    let authMode = 'signin';
+
+    const DEFAULT_CUSTOM_STATUSES = [
+      { id: 'status_not_started', name: 'Not Started', color: '#64748b', bg: '#f1f5f9', border: '#cbd5e1', isCompleted: false },
+      { id: 'status_in_progress', name: 'In Progress', color: '#0284c7', bg: '#e0f2fe', border: '#bae6fd', isCompleted: false },
+      { id: 'status_in_review', name: 'In Review', color: '#d97706', bg: '#fef3c7', border: '#fde68a', isCompleted: false },
+      { id: 'status_completed', name: 'Completed', color: '#16a34a', bg: '#dcfce7', border: '#bbf7d0', isCompleted: true },
+      { id: 'status_blocked', name: 'Blocked', color: '#dc2626', bg: '#fee2e2', border: '#fecaca', isCompleted: false }
+    ];
+
+    const GEMINI_API_KEY = "";
+    const GEMINI_MODEL = "gemini-3-flash-preview";
+
+    async function callGeminiApi(payload, maxRetries = 3) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+      let delay = 1000;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) {
+            throw new Error(`Gemini API HTTP status ${response.status}`);
+          }
+          return await response.json();
+        } catch (err) {
+          if (attempt < maxRetries - 1) {
+            await new Promise(res => setTimeout(res, delay));
+            delay *= 2;
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+
+    let state = {
+      workspace: { name: 'Workspace', description: 'TaskFlow Hub', icon: { type: 'icon', value: 'tasks', color: '#0284c7' } },
+      sidebarCollapsed: false,
+      currentView: 'board',
+      activeBoardId: 'board_default',
+      boards: [
+        {
+          id: 'board_default',
+          title: 'Sprint Planning & Delivery',
+          description: 'Google Workspace • Unified Project Tracker',
+          icon: { type: 'icon', value: 'tasks', color: '#0284c7' },
+          sections: [{ id: 'sec_default', name: 'To Do', createdAt: new Date().toISOString() }],
+          tasks: [],
+          collapsedSections: {}
+        }
+      ],
+      members: [],
+      currentUserId: null,
+      calendarSelectedMember: 'all',
+      calendarSelectedStatus: 'all',
+      calendarDate: new Date(),
+      customStatuses: [...DEFAULT_CUSTOM_STATUSES],
+      activeTaskId: null,
+      activeSubtaskId: null,
+      currentFilter: 'all',
+      searchQuery: '',
+      modalCallback: null
+    };
+
+    let generatedAiPlan = [];
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const title = document.getElementById('authGateTitle');
+      const sub = document.getElementById('authGateSubtitle');
+      const submitText = document.getElementById('authGateSubmitText');
+      const tabIn = document.getElementById('authTabSignIn');
+      const tabUp = document.getElementById('authTabSignUp');
+
+      if (mode === 'signin') {
+        title.textContent = 'Sign in';
+        sub.textContent = 'Access your team boards, tasks, and sprint deliverables';
+        submitText.textContent = 'Sign In';
+        tabIn.className = 'flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-xs transition';
+        tabUp.className = 'flex-1 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition';
+      } else {
+        title.textContent = 'Create your account';
+        sub.textContent = 'Join the team workspace and collaborate on tasks';
+        submitText.textContent = 'Create Account';
+        tabUp.className = 'flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-900 shadow-xs transition';
+        tabIn.className = 'flex-1 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition';
+      }
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = (document.getElementById('authGateEmail').value || '').trim();
+      const password = document.getElementById('authGatePassword').value || '';
+      const btn = document.getElementById('authGateSubmitBtn');
+      const submitText = document.getElementById('authGateSubmitText');
+
+      if (!email || !password) {
+        showToast('Please enter both email and password', 'alert');
+        return;
+      }
+
+      btn.disabled = true;
+      submitText.textContent = authMode === 'signin' ? 'Signing in...' : 'Creating account...';
+
+      if (supabaseClient) {
+        try {
+          if (authMode === 'signup') {
+            const { data, error } = await supabaseClient.auth.signUp({ email, password });
+            if (error) {
+              showToast('Sign up: ' + error.message, 'alert');
+            } else {
+              showToast('Sign up successful! Please check your email for confirmation.', 'success');
+              if (data?.user) unlockAppWithUser(data.user);
+            }
+          } else {
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) {
+              showToast('Sign in failed: ' + error.message, 'alert');
+            } else if (data?.user) {
+              unlockAppWithUser(data.user);
+              showToast(`Welcome back, ${data.user.email}!`, 'success');
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Authentication error occurred', 'alert');
+        } finally {
+          btn.disabled = false;
+          submitText.textContent = authMode === 'signin' ? 'Sign In' : 'Create Account';
+        }
+      } else {
+        // Local offline session fallback
+        unlockAppWithUser({ email, id: 'local_' + Date.now() });
+        showToast('Signed in successfully', 'success');
+        btn.disabled = false;
+        submitText.textContent = authMode === 'signin' ? 'Sign In' : 'Create Account';
+      }
+    }
+
+    function unlockAppWithUser(user) {
+      if (!user || user.email === 'guest@taskflow.dev') return;
+      supabaseUser = user;
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ email: user.email, id: user.id }));
+      } catch (e) {}
+
+      // Match or add user to workspace members
+      let member = state.members.find(m => m.email && m.email.toLowerCase() === (user.email || '').toLowerCase());
+      if (!member) {
+        const derivedName = (user.email || '').split('@')[0].replace(/[\._]/g, ' ') || 'Team Member';
+        const formattedName = derivedName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        member = {
+          id: 'usr_' + Date.now(),
+          name: formattedName,
+          email: user.email,
+          role: 'admin',
+          status: 'active'
+        };
+        state.members.push(member);
+      } else {
+        member.status = 'active';
+      }
+      state.currentUserId = member.id;
+      saveState();
+
+      const overlay = document.getElementById('authGateOverlay');
+      if (overlay) {
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+        setTimeout(() => overlay.classList.add('hidden'), 300);
+      }
+
+      renderAll();
+      loadTasks();
+    }
+
+    function handleLogout() {
+      if (supabaseClient) {
+        supabaseClient.auth.signOut();
+      }
+      supabaseUser = null;
+      try {
+        localStorage.removeItem(SESSION_KEY);
+      } catch (e) {}
+
+      const overlay = document.getElementById('authGateOverlay');
+      if (overlay) {
+        overlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+      }
+      closeTeamModal();
+      showToast('Signed out of TaskFlow', 'info');
+    }
+
+    function loadState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed.boards) && parsed.boards.length > 0) state.boards = parsed.boards;
+          if (parsed.activeBoardId) state.activeBoardId = parsed.activeBoardId;
+          if (Array.isArray(parsed.members)) {
+            // Strip out legacy mock users (Alex Rivera & Jordan Lee)
+            state.members = parsed.members.filter(m => 
+              m.email !== 'alex.rivera@gmail.com' && 
+              m.email !== 'jordan.lee@company.com' &&
+              m.name !== 'Alex Rivera' &&
+              m.name !== 'Jordan Lee'
+            );
+          }
+          if (Array.isArray(parsed.customStatuses)) state.customStatuses = parsed.customStatuses;
+        }
+      } catch (e) {
+        console.warn('Storage parsing error', e);
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          workspace: state.workspace,
+          sidebarCollapsed: state.sidebarCollapsed,
+          activeBoardId: state.activeBoardId,
+          boards: state.boards,
+          members: state.members,
+          customStatuses: state.customStatuses
+        }));
+      } catch (e) {
+        console.error('Storage save error', e);
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = 'px-3.5 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium shadow-xl flex items-center space-x-2 transition-all transform duration-200 translate-y-2 opacity-0 pointer-events-auto border border-slate-700';
+      toast.innerHTML = `<span>${type === 'success' ? '✓' : '●'}</span><span>${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 250);
+      }, 2500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function getInitials(name) {
+      if (!name) return '??';
+      const parts = name.trim().split(/\s+/);
+      return parts.length === 1 ? parts[0].substring(0, 2).toUpperCase() : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    function hexToRgba(hex, alpha = 0.15) {
+      let c = (hex || '#0284c7').replace('#', '');
+      if (c.length === 3) c = c.split('').map(x => x + x).join('');
+      const num = parseInt(c, 16) || 0;
+      return `rgba(${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}, ${alpha})`;
+    }
+
+    function getActiveBoard() {
+      let b = state.boards.find(item => item.id === state.activeBoardId);
+      if (!b) {
+        b = state.boards[0];
+        if (b) state.activeBoardId = b.id;
+      }
+      return b;
+    }
+
+    function getCurrentUser() {
+      if (state.members.length > 0) {
+        const found = state.members.find(m => m.id === state.currentUserId);
+        if (found) return found;
+        return state.members[0];
+      }
+      const email = supabaseUser?.email || 'user@workspace.com';
+      const derivedName = email.split('@')[0].replace(/[\._]/g, ' ');
+      const name = derivedName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'Admin';
+      return { id: 'usr_active', name, email, role: 'admin', status: 'active' };
+    }
+
+    function getDefaultStatus() {
+      return state.customStatuses.find(s => s.id === 'status_not_started') || state.customStatuses[0];
+    }
+
+    function findTaskAcrossBoards(taskId) {
+      if (!taskId) return null;
+      for (const board of state.boards) {
+        const task = (board.tasks || []).find(t => t.id === taskId);
+        if (task) return { task, board };
+      }
+      return null;
+    }
+
+    function addNewTaskQuick(preferredSectionId = null) {
+      const activeBoard = getActiveBoard();
+      if (!activeBoard) return;
+
+      if (!activeBoard.sections || activeBoard.sections.length === 0) {
+        const defaultSec = { id: 'sec_' + Date.now(), name: 'To Do', createdAt: new Date().toISOString() };
+        activeBoard.sections = [defaultSec];
+      }
+
+      let targetSectionId = preferredSectionId || activeBoard.sections[0].id;
+      const defaultStatus = getDefaultStatus();
+
+      const newTask = {
+        id: 'task_' + Date.now(),
+        sectionId: targetSectionId,
+        title: 'New Task',
+        status: 'incomplete',
+        statusIds: [defaultStatus.id],
+        assignees: [getCurrentUser().name],
+        startDate: '',
+        dueDate: '',
+        recurrence: 'none',
+        recurrenceRule: null,
+        subtasks: [],
+        description: '',
+        createdAt: new Date().toISOString()
+      };
+
+      if (!Array.isArray(activeBoard.tasks)) activeBoard.tasks = [];
+      activeBoard.tasks.push(newTask);
+      saveState();
+      renderAll();
+      openTaskDrawer(newTask.id);
+      showToast('New task created', 'success');
+
+      if (supabaseUser && typeof createNewTask === 'function') {
+        createNewTask('New Task');
+      }
+    }
+
+    function openTaskDrawer(taskId) {
+      state.activeTaskId = taskId;
+      state.activeSubtaskId = null;
+      const drawer = document.getElementById('taskDrawer');
+      const backdrop = document.getElementById('drawerBackdrop');
+      if (drawer && backdrop) {
+        drawer.classList.remove('translate-x-full');
+        backdrop.classList.remove('hidden');
+      }
+      syncActiveTaskDrawer();
+    }
+
+    function openSubtaskDrawer(taskId, subtaskId) {
+      state.activeTaskId = taskId;
+      state.activeSubtaskId = subtaskId;
+      const drawer = document.getElementById('taskDrawer');
+      const backdrop = document.getElementById('drawerBackdrop');
+      if (drawer && backdrop) {
+        drawer.classList.remove('translate-x-full');
+        backdrop.classList.remove('hidden');
+      }
+      syncActiveTaskDrawer();
+    }
+
+    function backToParentTask() {
+      state.activeSubtaskId = null;
+      syncActiveTaskDrawer();
+    }
+
+    function closeTaskDrawer() {
+      state.activeTaskId = null;
+      state.activeSubtaskId = null;
+      const drawer = document.getElementById('taskDrawer');
+      const backdrop = document.getElementById('drawerBackdrop');
+      if (drawer && backdrop) {
+        drawer.classList.add('translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+      closeStatusDropdown();
+      closeAssigneeDropdown();
+    }
+
+    function syncActiveTaskDrawer() {
+      if (!state.activeTaskId) return;
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const parentTask = res.task;
+      const board = res.board;
+
+      const isSubtaskMode = !!state.activeSubtaskId;
+      const targetItem = isSubtaskMode
+        ? (parentTask.subtasks || []).find(st => st.id === state.activeSubtaskId) || parentTask
+        : parentTask;
+
+      const breadcrumb = document.getElementById('drawerBreadcrumb');
+      const parentTitleEl = document.getElementById('drawerParentTaskTitle');
+      if (breadcrumb) {
+        breadcrumb.classList.toggle('hidden', !isSubtaskMode);
+        breadcrumb.classList.toggle('flex', isSubtaskMode);
+        if (isSubtaskMode && parentTitleEl) {
+          parentTitleEl.textContent = parentTask.title || 'Parent Task';
+        }
+      }
+
+      const subtasksSection = document.getElementById('drawerSubtasksContainer');
+      if (subtasksSection) {
+        subtasksSection.classList.toggle('hidden', isSubtaskMode);
+      }
+
+      const aiDescBtn = document.getElementById('aiEnhanceDescBtn');
+      if (aiDescBtn) {
+        aiDescBtn.classList.toggle('hidden', isSubtaskMode);
+      }
+
+      const titleInput = document.getElementById('drawerTaskTitle');
+      if (titleInput && document.activeElement !== titleInput) {
+        titleInput.value = targetItem.title || '';
+        titleInput.placeholder = isSubtaskMode ? 'Subtask title...' : 'Task title...';
+      }
+
+      const secCol = document.getElementById('drawerSectionSelectCol');
+      const secSelect = document.getElementById('drawerSectionSelect');
+      if (secSelect) {
+        secSelect.innerHTML = (board.sections || []).map(s => `<option value="${s.id}" ${s.id === parentTask.sectionId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+        secSelect.disabled = isSubtaskMode;
+      }
+      if (secCol) {
+        secCol.classList.toggle('opacity-50', isSubtaskMode);
+      }
+
+      const curSec = (board.sections || []).find(s => s.id === parentTask.sectionId);
+      const secBadge = document.getElementById('drawerSectionBadge');
+      if (secBadge) secBadge.textContent = curSec ? curSec.name : 'To Do';
+
+      document.getElementById('drawerStartDateInput').value = targetItem.startDate || '';
+      document.getElementById('drawerDueDateInput').value = targetItem.dueDate || '';
+      document.getElementById('drawerClearStartDateBtn').classList.toggle('hidden', !targetItem.startDate);
+
+      const editor = document.getElementById('drawerRichEditor');
+      if (editor && document.activeElement !== editor) editor.innerHTML = targetItem.description || '';
+
+      const assigneesBox = document.getElementById('drawerAssigneesDisplay');
+      if (assigneesBox) {
+        const assignees = targetItem.assignees || [];
+        assigneesBox.innerHTML = `
+          <div class="flex items-center space-x-1 flex-wrap">
+            ${assignees.map(a => `<span class="px-2 py-0.5 bg-brand-50 text-brand-700 rounded-full text-[10px] font-medium border border-brand-200">${escapeHtml(a)}</span>`).join('')}
+            <button type="button" onclick="openAssigneeDropdown('${parentTask.id}', event)" class="text-[10px] text-brand-600 hover:underline font-medium">+ Assign</button>
+          </div>
+        `;
+      }
+
+      const statusBox = document.getElementById('drawerStatusPills');
+      if (statusBox) {
+        const activeIds = Array.isArray(targetItem.statusIds) ? targetItem.statusIds : [];
+        const statuses = state.customStatuses.filter(s => activeIds.includes(s.id));
+        statusBox.innerHTML = (statuses.length > 0 ? statuses : [getDefaultStatus()]).map(s => `
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border" style="color: ${s.color}; background-color: ${s.bg || hexToRgba(s.color, 0.14)}; border-color: ${s.border || hexToRgba(s.color, 0.35)};">${escapeHtml(s.name)}</span>
+        `).join('');
+      }
+
+      renderDrawerRecurrenceControl(targetItem);
+
+      if (!isSubtaskMode) {
+        renderDrawerSubtasks(parentTask);
+      }
+    }
+
+    function renderDrawerRecurrenceControl(targetItem) {
+      const container = document.getElementById('drawerRecurrenceContainer');
+      if (!container) return;
+      const rec = targetItem.recurrence || 'none';
+      container.innerHTML = `
+        <select onchange="updateActiveItemRecurrence(this.value)" class="w-full text-xs bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 focus:ring-1 focus:ring-brand-500 focus:outline-none">
+          <option value="none" ${rec === 'none' ? 'selected' : ''}>Does not repeat</option>
+          <option value="daily" ${rec === 'daily' ? 'selected' : ''}>Daily</option>
+          <option value="weekly" ${rec === 'weekly' ? 'selected' : ''}>Weekly</option>
+          <option value="biweekly" ${rec === 'biweekly' ? 'selected' : ''}>Bi-weekly (Every 2 weeks)</option>
+          <option value="monthly" ${rec === 'monthly' ? 'selected' : ''}>Monthly</option>
+        </select>
+      `;
+    }
+
+    function updateActiveItemRecurrence(val) {
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const targetItem = state.activeSubtaskId
+        ? (res.task.subtasks || []).find(st => st.id === state.activeSubtaskId)
+        : res.task;
+      if (targetItem) {
+        targetItem.recurrence = val;
+        saveState();
+      }
+    }
+
+    function renderDrawerSubtasks(task) {
+      const list = document.getElementById('drawerSubtasksList');
+      const counter = document.getElementById('drawerSubtaskCounterBadge');
+      const bar = document.getElementById('drawerSubtaskProgressBar');
+      if (!list) return;
+
+      const subtasks = task.subtasks || [];
+      const completed = subtasks.filter(s => s.completed).length;
+      if (counter) counter.textContent = `${completed}/${subtasks.length}`;
+      if (bar) bar.style.width = subtasks.length > 0 ? `${(completed / subtasks.length) * 100}%` : '0%';
+
+      list.innerHTML = subtasks.map(st => {
+        const activeIds = Array.isArray(st.statusIds) ? st.statusIds : [];
+        const s = state.customStatuses.find(item => activeIds.includes(item.id)) || getDefaultStatus();
+        return `
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs hover:bg-slate-100/60 transition group">
+            <div class="flex items-center space-x-2 min-w-0 flex-1">
+              <input type="checkbox" ${st.completed ? 'checked' : ''} onchange="toggleSubtaskStatus('${task.id}', '${st.id}')" class="rounded text-brand-600 focus:ring-brand-500 shrink-0">
+              <span onclick="openSubtaskDrawer('${task.id}', '${st.id}')" class="truncate cursor-pointer hover:underline ${st.completed ? 'line-through text-slate-400' : 'text-slate-700 font-medium'}">${escapeHtml(st.title)}</span>
+              <span class="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium border shrink-0" style="color: ${s.color}; background-color: ${s.bg || hexToRgba(s.color, 0.12)}; border-color: ${s.border || hexToRgba(s.color, 0.35)};">${escapeHtml(s.name)}</span>
+            </div>
+            <div class="flex items-center space-x-1 shrink-0">
+              <button onclick="openSubtaskDrawer('${task.id}', '${st.id}')" class="px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition" title="Open Subtask Details">Details ➔</button>
+              <button onclick="deleteSubtaskDirect('${task.id}', '${st.id}')" class="text-slate-400 hover:text-rose-600 p-1" title="Delete Subtask">✕</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addSubtaskToActiveTask() {
+      if (!state.activeTaskId) return;
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const input = document.getElementById('newSubtaskInput');
+      const title = (input.value || '').trim();
+      if (!title) return;
+
+      if (!Array.isArray(res.task.subtasks)) res.task.subtasks = [];
+      const defaultStatus = getDefaultStatus();
+      res.task.subtasks.push({
+        id: 'sub_' + Date.now(),
+        title,
+        completed: false,
+        statusIds: [defaultStatus.id],
+        assignees: [getCurrentUser().name],
+        startDate: '',
+        dueDate: '',
+        recurrence: 'none',
+        description: ''
+      });
+
+      input.value = '';
+      saveState();
+      syncActiveTaskDrawer();
+      renderAll();
+    }
+
+    function toggleSubtaskStatus(taskId, subtaskId) {
+      const res = findTaskAcrossBoards(taskId);
+      if (!res) return;
+      const st = (res.task.subtasks || []).find(s => s.id === subtaskId);
+      if (!st) return;
+      st.completed = !st.completed;
+      saveState();
+      syncActiveTaskDrawer();
+      renderAll();
+    }
+
+    function deleteSubtaskDirect(taskId, subtaskId) {
+      const res = findTaskAcrossBoards(taskId);
+      if (!res) return;
+      res.task.subtasks = (res.task.subtasks || []).filter(s => s.id !== subtaskId);
+      saveState();
+      syncActiveTaskDrawer();
+      renderAll();
+    }
+
+    function updateActiveTaskTitle(val) {
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const targetItem = state.activeSubtaskId
+        ? (res.task.subtasks || []).find(st => st.id === state.activeSubtaskId)
+        : res.task;
+      if (targetItem) {
+        targetItem.title = val;
+        saveState();
+        renderAll();
+      }
+    }
+
+    function updateActiveTaskStartDate(val) {
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const targetItem = state.activeSubtaskId
+        ? (res.task.subtasks || []).find(st => st.id === state.activeSubtaskId)
+        : res.task;
+      if (targetItem) {
+        targetItem.startDate = val;
+        saveState();
+        renderAll();
+        syncActiveTaskDrawer();
+      }
+    }
+
+    function clearActiveTaskStartDate() {
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const targetItem = state.activeSubtaskId
+        ? (res.task.subtasks || []).find(st => st.id === state.activeSubtaskId)
+        : res.task;
+      if (targetItem) {
+        targetItem.startDate = '';
+        saveState();
+        renderAll();
+        syncActiveTaskDrawer();
+      }
+    }
+
+    function updateActiveTaskDueDate(val) {
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const targetItem = state.activeSubtaskId
+        ? (res.task.subtasks || []).find(st => st.id === state.activeSubtaskId)
+        : res.task;
+      if (targetItem) {
+        targetItem.dueDate = val;
+        saveState();
+        renderAll();
+        syncActiveTaskDrawer();
+      }
+    }
+
+    function handleEditorInput() {
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+      const targetItem = state.activeSubtaskId
+        ? (res.task.subtasks || []).find(st => st.id === state.activeSubtaskId)
+        : res.task;
+      if (targetItem) {
+        targetItem.description = document.getElementById('drawerRichEditor').innerHTML;
+        saveState();
+      }
+    }
+
+    function deleteActiveTask() {
+      if (!state.activeTaskId) return;
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+
+      if (state.activeSubtaskId) {
+        res.task.subtasks = (res.task.subtasks || []).filter(st => st.id !== state.activeSubtaskId);
+        state.activeSubtaskId = null;
+        saveState();
+        syncActiveTaskDrawer();
+        renderAll();
+        showToast('Subtask deleted', 'info');
+        return;
+      }
+
+      res.board.tasks = res.board.tasks.filter(t => t.id !== state.activeTaskId);
+      closeTaskDrawer();
+      saveState();
+      renderAll();
+      showToast('Task deleted', 'info');
+    }
+
+    function toggleTaskDrawerExpand() {
+      const drawer = document.getElementById('taskDrawer');
+      if (!drawer) return;
+      const isExpanded = drawer.classList.contains('sm:w-full');
+      if (isExpanded) {
+        drawer.classList.remove('sm:w-full', 'lg:w-full', 'max-w-none');
+        drawer.classList.add('sm:w-[540px]', 'lg:w-[620px]');
+      } else {
+        drawer.classList.remove('sm:w-[540px]', 'lg:w-[620px]');
+        drawer.classList.add('sm:w-full', 'lg:w-full', 'max-w-none');
+      }
+    }
+
+    function renderBoardView() {
+      const activeBoard = getActiveBoard();
+      const container = document.getElementById('sectionsListContainer');
+      const placeholder = document.getElementById('blankCanvasPlaceholder');
+      if (!container || !activeBoard) return;
+
+      document.getElementById('projectTitle').textContent = activeBoard.title;
+      document.getElementById('projectDescription').textContent = activeBoard.description || '';
+
+      container.innerHTML = '';
+      const sections = activeBoard.sections || [];
+
+      if (sections.length === 0) {
+        placeholder.classList.remove('hidden');
+      } else {
+        placeholder.classList.add('hidden');
+        sections.forEach((sec, idx) => {
+          container.appendChild(renderSection(sec, idx, activeBoard));
+        });
+      }
+    }
+
+    function renderSection(sec, index, board) {
+      let sectionTasks = (board.tasks || []).filter(t => t.sectionId === sec.id);
+
+      if (state.currentFilter === 'incomplete') sectionTasks = sectionTasks.filter(t => t.status !== 'complete');
+      else if (state.currentFilter === 'complete') sectionTasks = sectionTasks.filter(t => t.status === 'complete');
+      else if (state.currentFilter !== 'all') sectionTasks = sectionTasks.filter(t => (t.statusIds || []).includes(state.currentFilter));
+
+      if (state.searchQuery) {
+        const q = state.searchQuery.toLowerCase();
+        sectionTasks = sectionTasks.filter(t => (t.title || '').toLowerCase().includes(q));
+      }
+
+      const secEl = document.createElement('div');
+      secEl.className = 'bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden';
+
+      const header = document.createElement('div');
+      header.className = 'px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between';
+      header.innerHTML = `
+        <div class="flex items-center space-x-2">
+          <span class="font-semibold text-xs text-slate-800 cursor-pointer hover:text-brand-600 transition" onclick="promptRenameSection('${sec.id}')" title="Click to rename section">${escapeHtml(sec.name)}</span>
+          <span class="text-[10px] text-slate-400 bg-slate-200/60 px-1.5 py-0.2 rounded-full">${sectionTasks.length}</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <button onclick="addNewTaskQuick('${sec.id}')" class="px-2 py-0.5 text-xs text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded transition" title="Add Task">+ Add Task</button>
+          <button onclick="deleteSection('${sec.id}')" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition" title="Delete Section">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          </button>
+        </div>
+      `;
+      secEl.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'divide-y divide-slate-100';
+
+      if (sectionTasks.length === 0) {
+        body.innerHTML = `<div class="py-3 px-4 text-xs text-slate-400">No tasks in this section. <button onclick="addNewTaskQuick('${sec.id}')" class="text-brand-600 hover:underline">Add one</button></div>`;
+      } else {
+        sectionTasks.forEach(task => {
+          body.appendChild(createTaskRowElement(task, board));
+        });
+      }
+      secEl.appendChild(body);
+      return secEl;
+    }
+
+    function createTaskRowElement(task, board) {
+      const isComplete = task.status === 'complete';
+      const row = document.createElement('div');
+      row.className = `grid grid-cols-12 gap-3 px-4 py-2.5 items-center hover:bg-slate-50/80 transition cursor-pointer text-xs ${isComplete ? 'opacity-70 bg-slate-50/40' : ''}`;
+      row.onclick = () => openTaskDrawer(task.id);
+
+      const activeStatusIds = Array.isArray(task.statusIds) ? task.statusIds : [];
+      let assignedStatuses = state.customStatuses.filter(s => activeStatusIds.includes(s.id));
+      if (assignedStatuses.length === 0) assignedStatuses = [getDefaultStatus()];
+
+      const statusHtml = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border truncate" style="color: ${assignedStatuses[0].color}; background-color: ${assignedStatuses[0].bg || hexToRgba(assignedStatuses[0].color, 0.14)}; border-color: ${assignedStatuses[0].border || hexToRgba(assignedStatuses[0].color, 0.35)};">${escapeHtml(assignedStatuses[0].name)}</span>`;
+
+      const subtasks = task.subtasks || [];
+      const subtaskDone = subtasks.filter(s => s.completed).length;
+
+      row.innerHTML = `
+        <div class="col-span-4 flex items-center space-x-2 min-w-0">
+          <button type="button" onclick="toggleTaskStatus('${task.id}', event)" class="w-4 h-4 rounded border flex items-center justify-center transition shrink-0 ${isComplete ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white'}">
+            ${isComplete ? '✓' : ''}
+          </button>
+          <span class="font-medium text-slate-800 truncate flex-1 ${isComplete ? 'line-through text-slate-400' : ''}">${escapeHtml(task.title || 'Untitled Task')}</span>
+          ${subtasks.length > 0 ? `<span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded-full">${subtaskDone}/${subtasks.length}</span>` : ''}
+        </div>
+        <div class="col-span-2">${statusHtml}</div>
+        <div class="col-span-2 text-slate-600 truncate">${escapeHtml((task.assignees || []).join(', ') || '-')}</div>
+        <div class="col-span-2 text-slate-500 text-[11px] truncate">${escapeHtml(task.dueDate || '-')}</div>
+        <div class="col-span-1 text-slate-400 text-[11px]">-</div>
+        <div class="col-span-1 text-right">
+          <button onclick="deleteTaskDirect('${task.id}', event)" class="p-1 text-slate-300 hover:text-rose-600 rounded transition" title="Delete">✕</button>
+        </div>
+      `;
+      return row;
+    }
+
+    function toggleTaskStatus(taskId, event) {
+      if (event) event.stopPropagation();
+      const res = findTaskAcrossBoards(taskId);
+      if (!res) return;
+      res.task.status = res.task.status === 'complete' ? 'incomplete' : 'complete';
+      saveState();
+      renderAll();
+      syncActiveTaskDrawer();
+    }
+
+    function deleteTaskDirect(taskId, event) {
+      if (event) event.stopPropagation();
+      const res = findTaskAcrossBoards(taskId);
+      if (!res) return;
+      res.board.tasks = res.board.tasks.filter(t => t.id !== taskId);
+      saveState();
+      renderAll();
+      showToast('Task removed', 'info');
+    }
+
+    async function loadTasks() {
+      if (!supabaseClient) return;
+      try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) return;
+        const { data: tasks, error } = await supabaseClient.from('tasks').select('*').order('created_at', { ascending: false });
+        if (!error && tasks) renderTasksToScreen(tasks);
+      } catch (err) {
+        console.error("loadTasks exception:", err);
+      }
+    }
+
+    function renderTasksToScreen(tasks) {
+      if (!Array.isArray(tasks)) return;
+      const activeBoard = getActiveBoard();
+      if (!activeBoard) return;
+
+      if (!activeBoard.sections || activeBoard.sections.length === 0) {
+        activeBoard.sections = [{ id: 'sec_' + Date.now(), name: 'To Do', createdAt: new Date().toISOString() }];
+      }
+      const defaultSecId = activeBoard.sections[0].id;
+      const defaultStatus = getDefaultStatus();
+
+      tasks.forEach(dbTask => {
+        const existing = activeBoard.tasks.find(t => t.id === 'sb_' + dbTask.id || t.id === dbTask.id);
+        if (!existing) {
+          activeBoard.tasks.unshift({
+            id: 'sb_' + dbTask.id,
+            sectionId: defaultSecId,
+            title: dbTask.title || 'Untitled Task',
+            status: dbTask.status === 'completed' ? 'complete' : 'incomplete',
+            statusIds: [dbTask.status === 'completed' ? 'status_completed' : defaultStatus.id],
+            assignees: [getCurrentUser().name],
+            startDate: '',
+            dueDate: dbTask.due_date || '',
+            recurrence: 'none',
+            recurrenceRule: null,
+            subtasks: [],
+            description: dbTask.description || '',
+            createdAt: dbTask.created_at || new Date().toISOString()
+          });
+        }
+      });
+      renderAll();
+    }
+
+    async function createNewTask(titleText) {
+      if (!supabaseClient) return;
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) return;
+      await supabaseClient.from('tasks').insert([{ title: titleText, status: 'todo', user_id: user.id }]);
+    }
+
+    function switchView(viewName) {
+      state.currentView = viewName;
+      ['board', 'myTasks', 'calendar'].forEach(name => {
+        const btn = document.getElementById(`navBtn-${name}`);
+        if (btn) btn.className = name === viewName ? 'w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-50 text-brand-700 transition shadow-2xs' : 'w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 transition';
+      });
+
+      document.getElementById('viewContainerBoard').classList.toggle('hidden', viewName !== 'board');
+      document.getElementById('viewContainerMyTasks').classList.toggle('hidden', viewName !== 'myTasks');
+      document.getElementById('viewContainerCalendar').classList.toggle('hidden', viewName !== 'calendar');
+
+      document.getElementById('headerBoardMeta').classList.toggle('hidden', viewName !== 'board');
+      document.getElementById('headerSpecialMeta').classList.toggle('hidden', viewName === 'board');
+      if (viewName !== 'board') {
+        document.getElementById('headerSpecialMeta').classList.add('flex');
+        const titleEl = document.getElementById('specialViewTitle');
+        const subEl = document.getElementById('specialViewSubtitle');
+        if (viewName === 'calendar') {
+          if (titleEl) titleEl.textContent = 'Calendar';
+          if (subEl) subEl.textContent = '• Schedule & due dates view';
+        } else {
+          if (titleEl) titleEl.textContent = 'My Tasks';
+          if (subEl) subEl.textContent = '• Personal assigned workflow';
+        }
+      }
+
+      renderAll();
+    }
+
+    function renderAll() {
+      updateSidebarUI();
+      if (state.currentView === 'board') renderBoardView();
+      else if (state.currentView === 'myTasks') renderMyTasksView();
+      else if (state.currentView === 'calendar') {
+        updateCalendarFilters();
+        renderCalendarView();
+      }
+    }
+
+    function renderMyTasksView() {
+      const user = getCurrentUser();
+      const container = document.getElementById('myTasksListContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      const activeBoard = getActiveBoard();
+      const myTasks = (activeBoard.tasks || []).filter(t => (t.assignees || []).includes(user.name));
+
+      const mySubtasks = [];
+      (activeBoard.tasks || []).forEach(parentTask => {
+        (parentTask.subtasks || []).forEach(st => {
+          if ((st.assignees || []).includes(user.name)) {
+            mySubtasks.push({ parentTask, subtask: st });
+          }
+        });
+      });
+
+      if (myTasks.length === 0 && mySubtasks.length === 0) {
+        container.innerHTML = `<div class="py-8 text-center text-xs text-slate-400">No tasks or subtasks assigned to you.</div>`;
+        return;
+      }
+
+      myTasks.forEach(task => container.appendChild(createTaskRowElement(task, activeBoard)));
+
+      mySubtasks.forEach(({ parentTask, subtask }) => {
+        const row = document.createElement('div');
+        const isComplete = subtask.completed;
+        const activeIds = Array.isArray(subtask.statusIds) ? subtask.statusIds : [];
+        const s = state.customStatuses.find(st => activeIds.includes(st.id)) || getDefaultStatus();
+
+        row.className = `grid grid-cols-12 gap-3 px-4 py-2.5 items-center hover:bg-slate-50/80 transition cursor-pointer text-xs ${isComplete ? 'opacity-70 bg-slate-50/40' : ''}`;
+        row.onclick = () => openSubtaskDrawer(parentTask.id, subtask.id);
+
+        row.innerHTML = `
+          <div class="col-span-5 flex items-center space-x-2 min-w-0">
+            <span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">Subtask</span>
+            <span class="font-medium text-slate-800 truncate ${isComplete ? 'line-through text-slate-400' : ''}">${escapeHtml(subtask.title)}</span>
+          </div>
+          <div class="col-span-2 text-slate-500 truncate text-[11px]">${escapeHtml(parentTask.title)}</div>
+          <div class="col-span-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border" style="color: ${s.color}; background-color: ${s.bg || hexToRgba(s.color, 0.12)}; border-color: ${s.border || hexToRgba(s.color, 0.35)};">${escapeHtml(s.name)}</span>
+          </div>
+          <div class="col-span-2 text-slate-500 text-[11px] truncate">${escapeHtml(subtask.dueDate || '-')}</div>
+          <div class="col-span-1 text-right">
+            <button onclick="event.stopPropagation(); deleteSubtaskDirect('${parentTask.id}', '${subtask.id}'); renderMyTasksView();" class="p-1 text-slate-300 hover:text-rose-600 rounded transition" title="Delete">✕</button>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function updateCalendarFilters() {
+      const memberSel = document.getElementById('calendarMemberFilter');
+      if (memberSel) {
+        const cur = state.calendarSelectedMember;
+        memberSel.innerHTML = `<option value="all">All Members</option>` + state.members.map(m => `<option value="${m.name}" ${m.name === cur ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
+      }
+    }
+
+    function renderCalendarView() {
+      const monthLabel = document.getElementById('calendarMonthLabel');
+      const grid = document.getElementById('calendarDaysGrid');
+      if (!grid) return;
+
+      const curr = state.calendarDate;
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      if (monthLabel) monthLabel.textContent = `${monthNames[curr.getMonth()]} ${curr.getFullYear()}`;
+
+      grid.innerHTML = '';
+
+      const activeBoard = getActiveBoard();
+      let allItems = [];
+
+      (activeBoard ? (activeBoard.tasks || []) : []).forEach(t => {
+        allItems.push({ ...t, isSubtask: false });
+        (t.subtasks || []).forEach(st => {
+          if (st.dueDate || st.startDate) {
+            allItems.push({
+              ...st,
+              isSubtask: true,
+              parentTaskId: t.id,
+              parentTitle: t.title,
+              status: st.completed ? 'complete' : 'incomplete'
+            });
+          }
+        });
+      });
+
+      if (state.calendarSelectedMember && state.calendarSelectedMember !== 'all') {
+        allItems = allItems.filter(item => (item.assignees || []).includes(state.calendarSelectedMember));
+      }
+
+      if (state.calendarSelectedStatus && state.calendarSelectedStatus !== 'all') {
+        if (state.calendarSelectedStatus === 'incomplete') {
+          allItems = allItems.filter(item => item.status !== 'complete');
+        } else if (state.calendarSelectedStatus === 'complete') {
+          allItems = allItems.filter(item => item.status === 'complete');
+        } else {
+          allItems = allItems.filter(item => (item.statusIds || []).includes(state.calendarSelectedStatus));
+        }
+      }
+
+      const year = curr.getFullYear();
+      const month = curr.getMonth();
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const prevDaysInMonth = new Date(year, month, 0).getDate();
+      const totalCells = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7;
+      const today = new Date();
+
+      for (let i = 0; i < totalCells; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'min-h-[110px] p-2 bg-white flex flex-col justify-between group transition hover:bg-slate-50/70 relative';
+
+        let dateStr = '';
+        let dayNum = 0;
+        let isCurrentMonth = true;
+
+        if (i < firstDayIndex) {
+          isCurrentMonth = false;
+          dayNum = prevDaysInMonth - firstDayIndex + 1 + i;
+          cell.classList.add('bg-slate-50/40', 'opacity-50');
+        } else if (i >= firstDayIndex + daysInMonth) {
+          isCurrentMonth = false;
+          dayNum = i - (firstDayIndex + daysInMonth) + 1;
+          cell.classList.add('bg-slate-50/40', 'opacity-50');
+        } else {
+          dayNum = i - firstDayIndex + 1;
+          dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+        }
+
+        const isToday = isCurrentMonth && dayNum === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center justify-between mb-1.5';
+
+        const dayNumBadge = document.createElement('span');
+        dayNumBadge.className = `text-xs font-semibold ${isToday ? 'w-5 h-5 rounded-full bg-brand-600 text-white flex items-center justify-center' : isCurrentMonth ? 'text-slate-800' : 'text-slate-400'}`;
+        dayNumBadge.textContent = dayNum;
+        topRow.appendChild(dayNumBadge);
+
+        if (isCurrentMonth && dateStr) {
+          const addBtn = document.createElement('button');
+          addBtn.className = 'opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded transition text-[10px]';
+          addBtn.title = 'Add task on this date';
+          addBtn.innerHTML = '+ Add';
+          addBtn.onclick = (e) => {
+            e.stopPropagation();
+            addNewTaskForDate(dateStr);
+          };
+          topRow.appendChild(addBtn);
+        }
+        cell.appendChild(topRow);
+
+        const tasksBox = document.createElement('div');
+        tasksBox.className = 'flex-1 space-y-1 overflow-y-auto max-h-[85px] pr-0.5';
+
+        if (isCurrentMonth && dateStr) {
+          const dayItems = allItems.filter(item => {
+            if (item.dueDate === dateStr) return true;
+            if (item.startDate && item.dueDate && item.startDate <= dateStr && item.dueDate >= dateStr) return true;
+            if (!item.dueDate && item.startDate === dateStr) return true;
+            return false;
+          });
+
+          dayItems.forEach(item => {
+            const isComplete = item.status === 'complete';
+            const activeStatusIds = Array.isArray(item.statusIds) ? item.statusIds : [];
+            let s = state.customStatuses.find(st => activeStatusIds.includes(st.id)) || getDefaultStatus();
+
+            const itemBtn = document.createElement('button');
+            itemBtn.type = 'button';
+            itemBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (item.isSubtask) openSubtaskDrawer(item.parentTaskId, item.id);
+              else openTaskDrawer(item.id);
+            };
+            itemBtn.className = 'w-full text-left p-1 rounded-md text-[11px] font-medium border flex items-center space-x-1.5 truncate shadow-2xs hover:brightness-95 transition cursor-pointer';
+            itemBtn.style.backgroundColor = s.bg || hexToRgba(s.color, 0.12);
+            itemBtn.style.color = s.color;
+            itemBtn.style.borderColor = s.border || hexToRgba(s.color, 0.35);
+
+            itemBtn.innerHTML = `
+              <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background-color: ${s.color}"></span>
+              ${item.isSubtask ? `<span class="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 px-1 rounded shrink-0">Sub</span>` : ''}
+              <span class="truncate flex-1 ${isComplete ? 'line-through opacity-70' : ''}">${escapeHtml(item.title || 'Untitled')}</span>
+            `;
+            tasksBox.appendChild(itemBtn);
+          });
+        }
+
+        cell.appendChild(tasksBox);
+        grid.appendChild(cell);
+      }
+    }
+
+    function addNewTaskForDate(dateStr) {
+      const activeBoard = getActiveBoard();
+      if (!activeBoard) return;
+
+      if (!activeBoard.sections || activeBoard.sections.length === 0) {
+        activeBoard.sections = [{ id: 'sec_' + Date.now(), name: 'To Do', createdAt: new Date().toISOString() }];
+      }
+
+      const defaultStatus = getDefaultStatus();
+      const newTask = {
+        id: 'task_' + Date.now(),
+        sectionId: activeBoard.sections[0].id,
+        title: 'New Task',
+        status: 'incomplete',
+        statusIds: [defaultStatus.id],
+        assignees: [getCurrentUser().name],
+        startDate: '',
+        dueDate: dateStr,
+        recurrence: 'none',
+        recurrenceRule: null,
+        subtasks: [],
+        description: '',
+        createdAt: new Date().toISOString()
+      };
+
+      if (!Array.isArray(activeBoard.tasks)) activeBoard.tasks = [];
+      activeBoard.tasks.push(newTask);
+      saveState();
+      renderAll();
+      openTaskDrawer(newTask.id);
+      showToast(`Task created for ${dateStr}`, 'success');
+    }
+
+    function calendarPrevMonth() { state.calendarDate.setMonth(state.calendarDate.getMonth() - 1); renderCalendarView(); }
+    function calendarNextMonth() { state.calendarDate.setMonth(state.calendarDate.getMonth() + 1); renderCalendarView(); }
+    function calendarToday() { state.calendarDate = new Date(); renderCalendarView(); }
+    function handleCalendarMemberChange(v) { state.calendarSelectedMember = v; renderCalendarView(); }
+    function handleCalendarStatusChange(v) { state.calendarSelectedStatus = v; renderCalendarView(); }
+
+    function updateSidebarUI() {
+      const user = getCurrentUser();
+      const avatarEl = document.getElementById('sidebarUserAvatar');
+      const nameEl = document.getElementById('sidebarUserName');
+      const roleEl = document.getElementById('sidebarUserRole');
+
+      if (avatarEl) avatarEl.textContent = getInitials(user.name);
+      if (nameEl) nameEl.textContent = user.name;
+      if (roleEl) roleEl.textContent = user.role;
+
+      const boardsList = document.getElementById('sidebarBoardsList');
+      if (boardsList) {
+        boardsList.innerHTML = state.boards.map(b => `
+          <button onclick="selectBoard('${b.id}')" class="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium transition ${b.id === state.activeBoardId ? 'bg-slate-100 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-50'}">
+            ${escapeHtml(b.title)}
+          </button>
+        `).join('');
+      }
+    }
+
+    function selectBoard(id) {
+      state.activeBoardId = id;
+      saveState();
+      switchView('board');
+    }
+
+    function toggleSidebarCollapse() {
+      state.sidebarCollapsed = !state.sidebarCollapsed;
+      document.getElementById('appSidebar').classList.toggle('-ml-60', state.sidebarCollapsed);
+      document.getElementById('sidebarExpandBtn').classList.toggle('hidden', !state.sidebarCollapsed);
+    }
+
+    function promptAddSection() {
+      openCustomModal({
+        title: 'Add Section',
+        desc: 'Enter section name',
+        onConfirm: (name) => {
+          if (!name) return;
+          const activeBoard = getActiveBoard();
+          if (!Array.isArray(activeBoard.sections)) activeBoard.sections = [];
+          activeBoard.sections.push({ id: 'sec_' + Date.now(), name, createdAt: new Date().toISOString() });
+          saveState();
+          renderBoardView();
+        }
+      });
+    }
+
+    function promptRenameSection(secId) {
+      const activeBoard = getActiveBoard();
+      if (!activeBoard) return;
+      const sec = (activeBoard.sections || []).find(s => s.id === secId);
+      if (!sec) return;
+
+      openCustomModal({
+        title: 'Rename Section',
+        desc: 'Enter new section name',
+        onConfirm: (newName) => {
+          if (!newName) return;
+          sec.name = newName;
+          saveState();
+          renderBoardView();
+          showToast('Section renamed', 'success');
+        }
+      });
+    }
+
+    function deleteSection(sectionId) {
+      const activeBoard = getActiveBoard();
+      if (!activeBoard) return;
+
+      const secIndex = (activeBoard.sections || []).findIndex(s => s.id === sectionId);
+      if (secIndex === -1) return;
+
+      const secName = activeBoard.sections[secIndex].name;
+      activeBoard.sections.splice(secIndex, 1);
+      if (Array.isArray(activeBoard.tasks)) {
+        activeBoard.tasks = activeBoard.tasks.filter(t => t.sectionId !== sectionId);
+      }
+
+      saveState();
+      renderBoardView();
+      showToast(`Section "${secName}" deleted`, 'info');
+    }
+
+    function promptCreateNewBoard() {
+      openCustomModal({
+        title: 'Create Board',
+        desc: 'Enter board name',
+        onConfirm: (name) => {
+          if (!name) return;
+          const b = { id: 'board_' + Date.now(), title: name, sections: [{ id: 'sec_' + Date.now(), name: 'To Do' }], tasks: [] };
+          state.boards.push(b);
+          state.activeBoardId = b.id;
+          saveState();
+          renderAll();
+        }
+      });
+    }
+
+    function openCustomModal({ title, desc, onConfirm }) {
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalDesc').textContent = desc;
+      const input = document.getElementById('modalTextInput');
+      input.value = '';
+      state.modalCallback = onConfirm;
+      document.getElementById('customModal').classList.remove('hidden');
+      document.getElementById('customModal').classList.add('flex');
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeCustomModal() {
+      document.getElementById('customModal').classList.add('hidden');
+      document.getElementById('customModal').classList.remove('flex');
+    }
+
+    function handleModalConfirm() {
+      const val = (document.getElementById('modalTextInput').value || '').trim();
+      if (typeof state.modalCallback === 'function') state.modalCallback(val);
+      closeCustomModal();
+    }
+
+    function openTeamModal() {
+      renderTeamModalContent();
+      document.getElementById('teamPermissionsModal').classList.remove('hidden');
+      document.getElementById('teamPermissionsModal').classList.add('flex');
+    }
+
+    function closeTeamModal() {
+      document.getElementById('teamPermissionsModal').classList.add('hidden');
+      document.getElementById('teamPermissionsModal').classList.remove('flex');
+    }
+
+    function handleTeamModalBackdrop(e) {
+      if (e.target.id === 'teamPermissionsModal') closeTeamModal();
+    }
+
+    function renderTeamModalContent() {
+      const curUser = getCurrentUser();
+      const avEl = document.getElementById('modalUserAvatar');
+      const nameEl = document.getElementById('modalUserName');
+      const roleEl = document.getElementById('modalUserRole');
+      const emailEl = document.getElementById('modalUserEmail');
+
+      if (avEl) avEl.textContent = getInitials(curUser.name);
+      if (nameEl) nameEl.textContent = curUser.name;
+      if (roleEl) roleEl.textContent = curUser.role;
+      if (emailEl) emailEl.textContent = curUser.email || (supabaseUser ? supabaseUser.email : 'local.user@workspace.dev');
+
+      const countBadge = document.getElementById('teamMemberCountBadge');
+      const activeCount = state.members.filter(m => m.status !== 'invited').length;
+      const pendingCount = state.members.filter(m => m.status === 'invited').length;
+      if (countBadge) {
+        countBadge.textContent = `${state.members.length} members ${pendingCount > 0 ? `(${pendingCount} pending)` : ''}`;
+      }
+
+      const list = document.getElementById('teamMembersList');
+      if (list) {
+        if (state.members.length === 0) {
+          list.innerHTML = `<div class="py-6 text-center text-xs text-slate-400">No other team members yet. Invite colleagues above.</div>`;
+          return;
+        }
+
+        list.innerHTML = state.members.map(m => {
+          const isMe = m.id === curUser.id || (m.email && curUser.email && m.email.toLowerCase() === curUser.email.toLowerCase());
+          const isInvited = m.status === 'invited';
+
+          return `
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
+              <div class="flex items-center space-x-2.5 min-w-0 flex-1">
+                <span class="w-7 h-7 rounded-full ${isInvited ? 'bg-amber-100 text-amber-700' : 'bg-brand-100 text-brand-700'} text-[10px] font-bold flex items-center justify-center shrink-0">
+                  ${getInitials(m.name || m.email)}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center space-x-1.5">
+                    <span class="font-medium text-slate-800 truncate">${escapeHtml(m.name || m.email)}</span>
+                    ${isMe ? `<span class="text-[9px] bg-slate-200 text-slate-700 px-1 py-0.2 rounded font-semibold">You</span>` : ''}
+                    ${isInvited ? `<span class="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-medium border border-amber-200">Pending Invite</span>` : ''}
+                  </div>
+                  <span class="text-[10px] text-slate-400 truncate block">${escapeHtml(m.email || 'No email')}</span>
+                </div>
+              </div>
+              <div class="flex items-center space-x-1.5 shrink-0 ml-2">
+                <span class="text-[10px] uppercase font-bold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded">${escapeHtml(m.role || 'collaborator')}</span>
+                ${isInvited ? `
+                  <button onclick="resendInvite('${m.id}')" class="p-1 text-brand-600 hover:bg-brand-50 rounded" title="Resend Invite">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                ` : ''}
+                ${!isMe ? `
+                  <button onclick="removeTeamMember('${m.id}')" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition" title="Remove Member">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function inviteTeamMemberByEmail() {
+      const emailInput = document.getElementById('inviteMemberEmailInput');
+      const roleSelect = document.getElementById('inviteMemberRoleSelect');
+      const email = (emailInput?.value || '').trim();
+      const role = roleSelect?.value || 'collaborator';
+
+      if (!email || !email.includes('@')) {
+        showToast('Please enter a valid email address', 'alert');
+        return;
+      }
+
+      const existing = state.members.find(m => m.email && m.email.toLowerCase() === email.toLowerCase());
+      if (existing) {
+        showToast('A team member or invitation already exists with this email', 'alert');
+        return;
+      }
+
+      const derivedName = email.split('@')[0].replace(/[\._]/g, ' ');
+      const name = derivedName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+      const newMember = {
+        id: 'usr_' + Date.now(),
+        name,
+        email,
+        role,
+        status: 'invited',
+        invitedAt: new Date().toISOString()
+      };
+
+      state.members.push(newMember);
+      saveState();
+
+      if (emailInput) emailInput.value = '';
+      renderTeamModalContent();
+      updateCalendarFilters();
+      showToast(`Invitation sent to ${email}`, 'success');
+    }
+
+    function resendInvite(memberId) {
+      const member = state.members.find(m => m.id === memberId);
+      if (!member) return;
+      member.invitedAt = new Date().toISOString();
+      saveState();
+      showToast(`Invitation resent to ${member.email}`, 'success');
+    }
+
+    function removeTeamMember(memberId) {
+      const member = state.members.find(m => m.id === memberId);
+      if (!member) return;
+      state.members = state.members.filter(m => m.id !== memberId);
+      saveState();
+      renderTeamModalContent();
+      updateCalendarFilters();
+      showToast(`Removed ${member.name || member.email} from workspace`, 'info');
+    }
+
+    function copyWorkspaceInviteLink() {
+      const inviteUrl = window.location.href.split('#')[0];
+      const tempInput = document.createElement('input');
+      tempInput.value = inviteUrl;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      try {
+        document.execCommand('copy');
+        showToast('Workspace invite link copied to clipboard', 'success');
+      } catch (err) {
+        showToast('Failed to copy link', 'alert');
+      }
+      document.body.removeChild(tempInput);
+    }
+    }
+
+    function addTeamMemberWithRole() {
+      const input = document.getElementById('newMemberNameInput');
+      const role = document.getElementById('newMemberRoleSelect').value;
+      const name = (input.value || '').trim();
+      if (!name) return;
+      state.members.push({ id: 'usr_' + Date.now(), name, email: '', role });
+      input.value = '';
+      saveState();
+      renderTeamModalContent();
+    }
+
+    function setFilter(v) { state.currentFilter = v; renderBoardView(); }
+    function handleSearch(v) { state.searchQuery = (v || '').trim(); renderBoardView(); }
+
+    function closeStatusDropdown() { document.getElementById('statusDropdownMenu').classList.add('hidden'); }
+    function closeAssigneeDropdown() { document.getElementById('assigneeDropdownMenu').classList.add('hidden'); }
+
+    function openStatusDropdown(taskId, event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById('statusDropdownMenu');
+      const list = document.getElementById('statusItemsList');
+      const res = findTaskAcrossBoards(taskId);
+      if (!res || !menu || !list) return;
+
+      list.innerHTML = state.customStatuses.map(s => `
+        <button onclick="setStatusForTask('${taskId}', '${s.id}')" class="w-full text-left p-1.5 rounded hover:bg-slate-50 flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full" style="background-color: ${s.color}"></span>
+          <span>${escapeHtml(s.name)}</span>
+        </button>
+      `).join('');
+
+      if (event && event.currentTarget) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        menu.style.top = `${Math.min(window.innerHeight - 200, rect.bottom + 4)}px`;
+        menu.style.left = `${Math.min(window.innerWidth - 240, rect.left)}px`;
+      }
+      menu.classList.remove('hidden');
+    }
+
+    function setStatusForTask(taskId, statusId) {
+      const res = findTaskAcrossBoards(taskId);
+      if (!res) return;
+      res.task.statusIds = [statusId];
+      const s = state.customStatuses.find(st => st.id === statusId);
+      res.task.status = (s && s.isCompleted) ? 'complete' : 'incomplete';
+      saveState();
+      renderAll();
+      syncActiveTaskDrawer();
+      closeStatusDropdown();
+    }
+
+    function openAssigneeDropdown(taskId, event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById('assigneeDropdownMenu');
+      const list = document.getElementById('assigneeItemsList');
+      const res = findTaskAcrossBoards(taskId);
+      if (!res || !menu || !list) return;
+
+      list.innerHTML = state.members.map(m => `
+        <button onclick="assignMemberToTask('${taskId}', '${m.name}')" class="w-full text-left p-1.5 rounded hover:bg-slate-50">
+          ${escapeHtml(m.name)}
+        </button>
+      `).join('');
+
+      if (event && event.currentTarget) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        menu.style.top = `${Math.min(window.innerHeight - 200, rect.bottom + 4)}px`;
+        menu.style.left = `${Math.min(window.innerWidth - 240, rect.left)}px`;
+      }
+      menu.classList.remove('hidden');
+    }
+
+    function assignMemberToTask(taskId, name) {
+      const res = findTaskAcrossBoards(taskId);
+      if (!res) return;
+      if (!Array.isArray(res.task.assignees)) res.task.assignees = [];
+      const idx = res.task.assignees.indexOf(name);
+      if (idx === -1) res.task.assignees.push(name);
+      else res.task.assignees.splice(idx, 1);
+      saveState();
+      renderAll();
+      syncActiveTaskDrawer();
+      closeAssigneeDropdown();
+    }
+
+    function openAIAssistantModal() {
+      document.getElementById('aiAssistantModal').classList.remove('hidden');
+      document.getElementById('aiAssistantModal').classList.add('flex');
+    }
+
+    function closeAIAssistantModal() {
+      document.getElementById('aiAssistantModal').classList.add('hidden');
+      document.getElementById('aiAssistantModal').classList.remove('flex');
+    }
+
+    function switchAIAssistantTab(tabName) {
+      const isStandup = tabName === 'standup';
+      document.getElementById('aiTabBtn-standup').className = isStandup
+        ? 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 transition'
+        : 'px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition';
+      document.getElementById('aiTabBtn-planner').className = !isStandup
+        ? 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 transition'
+        : 'px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition';
+
+      document.getElementById('aiTabContent-standup').classList.toggle('hidden', !isStandup);
+      document.getElementById('aiTabContent-planner').classList.toggle('hidden', isStandup);
+    }
+
+    async function aiGenerateSprintSummary() {
+      const btn = document.getElementById('aiGenerateStandupBtn');
+      const output = document.getElementById('aiStandupOutput');
+      const copyBtn = document.getElementById('aiCopyStandupBtn');
+      const activeBoard = getActiveBoard();
+
+      if (!activeBoard) return;
+      const tasks = activeBoard.tasks || [];
+      if (tasks.length === 0) {
+        showToast('No tasks found on this board to summarize.', 'info');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="inline-block animate-spin mr-1.5">⟳</span> Analyzing board with Gemini...`;
+      output.classList.remove('hidden');
+      output.textContent = "Synthesizing sprint progress, deliverables, and team workload...";
+
+      try {
+        const tasksSummary = tasks.map(t => ({
+          title: t.title,
+          status: t.status === 'complete' ? 'Completed' : 'Incomplete',
+          assignees: t.assignees || [],
+          dueDate: t.dueDate || 'No due date',
+          subtasksCount: (t.subtasks || []).length,
+          subtasksDone: (t.subtasks || []).filter(s => s.completed).length
+        }));
+
+        const systemPrompt = "You are an executive Agile Delivery Director. Format a crisp daily standup and executive brief for the team. Include: 1) Executive Summary & Progress, 2) Completed Milestones, 3) Critical In-Flight Work & Potential Blockers, 4) Immediate Next Actions.";
+        const userPrompt = `Summarize the current board state for "${activeBoard.title}". Total tasks: ${tasks.length}. Task details:\n${JSON.stringify(tasksSummary, null, 2)}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] }
+        };
+
+        const result = await callGeminiApi(payload);
+        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (text) {
+          output.textContent = text.trim();
+          copyBtn.classList.remove('hidden');
+          showToast('Executive brief generated successfully', 'success');
+        } else {
+          output.textContent = "Unable to parse AI response. Please try again.";
+        }
+      } catch (err) {
+        console.error("Gemini standup error:", err);
+        output.textContent = "Error generating AI brief: " + (err.message || 'Please check your connection and try again.');
+        showToast('AI request failed', 'alert');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-white mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>Regenerate Executive Standup</span>`;
+      }
+    }
+
+    function copyAIBriefText() {
+      const output = document.getElementById('aiStandupOutput');
+      if (!output) return;
+      const text = output.innerText || output.textContent;
+      const tempTextArea = document.createElement('textarea');
+      tempTextArea.value = text;
+      document.body.appendChild(tempTextArea);
+      tempTextArea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Brief copied to clipboard', 'success');
+      } catch (e) {
+        showToast('Failed to copy', 'alert');
+      }
+      document.body.removeChild(tempTextArea);
+    }
+
+    async function aiRunProjectPlanGenerator() {
+      const input = document.getElementById('aiPlannerInput');
+      const btn = document.getElementById('aiRunPlannerBtn');
+      const previewBox = document.getElementById('aiPlanPreviewContainer');
+      const list = document.getElementById('aiPlanTasksList');
+      const promptText = (input.value || '').trim();
+
+      if (!promptText) {
+        showToast('Please enter an initiative or project description.', 'info');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="inline-block animate-spin mr-1.5">⟳</span> Planning with Gemini...`;
+
+      try {
+        const payload = {
+          contents: [{
+            parts: [{
+              text: `Break down this project initiative into 3 to 6 structured, actionable tasks with sections and subtasks: "${promptText}". Assign each task a suggested section name (like 'Planning', 'Implementation', 'Testing', or 'Launch').`
+            }]
+          }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  title: { type: "STRING" },
+                  sectionName: { type: "STRING" },
+                  subtasks: {
+                    type: "ARRAY",
+                    items: { type: "STRING" }
+                  }
+                },
+                required: ["title", "sectionName", "subtasks"]
+              }
+            }
+          }
+        };
+
+        const result = await callGeminiApi(payload);
+        const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) throw new Error("No structured output received from Gemini.");
+
+        generatedAiPlan = JSON.parse(jsonText);
+        previewBox.classList.remove('hidden');
+
+        list.innerHTML = generatedAiPlan.map((t, idx) => `
+          <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-slate-800">${escapeHtml(t.title)}</span>
+              <span class="text-[10px] font-medium bg-slate-200/80 px-2 py-0.5 rounded text-slate-600">${escapeHtml(t.sectionName || 'To Do')}</span>
+            </div>
+            ${Array.isArray(t.subtasks) && t.subtasks.length > 0 ? `
+              <ul class="text-[11px] text-slate-500 list-disc list-inside space-y-0.5 pl-1">
+                ${t.subtasks.map(st => `<li>${escapeHtml(st)}</li>`).join('')}
+              </ul>
+            ` : ''}
+          </div>
+        `).join('');
+
+        showToast(`Gemini generated ${generatedAiPlan.length} tasks`, 'success');
+      } catch (err) {
+        console.error("Gemini plan generator error:", err);
+        showToast("Error planning project: " + (err.message || 'Check connection'), "alert");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-white mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>Generate Project Plan</span>`;
+      }
+    }
+
+    function aiApplyPlanToActiveBoard() {
+      const activeBoard = getActiveBoard();
+      if (!activeBoard || !Array.isArray(generatedAiPlan) || generatedAiPlan.length === 0) return;
+
+      if (!Array.isArray(activeBoard.sections)) activeBoard.sections = [];
+      if (!Array.isArray(activeBoard.tasks)) activeBoard.tasks = [];
+
+      const defaultStatus = getDefaultStatus();
+      const currentUser = getCurrentUser();
+
+      generatedAiPlan.forEach(planItem => {
+        let sec = activeBoard.sections.find(s => s.name.toLowerCase() === (planItem.sectionName || '').toLowerCase());
+        if (!sec) {
+          sec = { id: 'sec_' + Date.now() + Math.floor(Math.random() * 1000), name: planItem.sectionName || 'To Do', createdAt: new Date().toISOString() };
+          activeBoard.sections.push(sec);
+        }
+
+        const subtasks = Array.isArray(planItem.subtasks) ? planItem.subtasks.map(st => ({
+          id: 'sub_' + Date.now() + Math.floor(Math.random() * 1000),
+          title: st,
+          completed: false,
+          statusIds: [defaultStatus.id],
+          assignees: [currentUser.name]
+        })) : [];
+
+        activeBoard.tasks.push({
+          id: 'task_' + Date.now() + Math.floor(Math.random() * 1000),
+          sectionId: sec.id,
+          title: planItem.title || 'Untitled Task',
+          status: 'incomplete',
+          statusIds: [defaultStatus.id],
+          assignees: [currentUser.name],
+          startDate: '',
+          dueDate: '',
+          recurrence: 'none',
+          recurrenceRule: null,
+          subtasks,
+          description: '',
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      saveState();
+      renderAll();
+      closeAIAssistantModal();
+      showToast(`Imported ${generatedAiPlan.length} tasks into board`, 'success');
+      generatedAiPlan = [];
+    }
+
+    async function aiEnhanceTaskDescription() {
+      if (!state.activeTaskId) return;
+      const res = findTaskAcrossBoards(state.activeTaskId);
+      if (!res) return;
+
+      const btn = document.getElementById('aiEnhanceDescBtn');
+      const editor = document.getElementById('drawerRichEditor');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="inline-block animate-spin mr-1">⟳</span> Polishing...`;
+      }
+
+      try {
+        const currentDesc = editor ? editor.innerText.trim() : (res.task.description || '');
+        const payload = {
+          contents: [{
+            parts: [{
+              text: `Generate a clear, professional task specification for: "${res.task.title}".
+Current notes: "${currentDesc || 'None'}".
+Format as clean HTML (using <strong>, <p>, and <ul>/<li> tags):
+- Objective
+- Key Deliverables
+- Acceptance Criteria.`
+            }]
+          }]
+        };
+
+        const result = await callGeminiApi(payload);
+        const enhancedHtml = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (enhancedHtml) {
+          const cleanHtml = enhancedHtml.replace(/```html/gi, '').replace(/```/g, '').trim();
+          res.task.description = cleanHtml;
+          if (editor) editor.innerHTML = cleanHtml;
+          saveState();
+          showToast("Scope enhanced by Gemini", "success");
+        }
+      } catch (err) {
+        console.error("Gemini description polish error:", err);
+        showToast("AI polish failed: " + (err.message || 'Check connection'), "alert");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<svg class="w-3 h-3 text-indigo-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span>✨ AI Polish Scope</span>`;
+        }
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      loadState();
+
+      // Check existing session
+      let existingSession = null;
+      try {
+        const stored = localStorage.getItem(SESSION_KEY);
+        if (stored) {
+          existingSession = JSON.parse(stored);
+          if (existingSession && existingSession.email === 'guest@taskflow.dev') {
+            localStorage.removeItem(SESSION_KEY);
+            existingSession = null;
+          }
+        }
+      } catch (e) {}
+
+      if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session && session.user) {
+          unlockAppWithUser(session.user);
+        } else if (existingSession) {
+          unlockAppWithUser(existingSession);
+        }
+      } else if (existingSession) {
+        unlockAppWithUser(existingSession);
+      }
+
+      renderAll();
+      switchView(state.currentView || 'board');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#statusDropdownMenu') && !e.target.closest('button[onclick*="openStatusDropdown"]')) closeStatusDropdown();
+      if (!e.target.closest('#assigneeDropdownMenu') && !e.target.closest('button[onclick*="openAssigneeDropdown"]')) closeAssigneeDropdown();
+    });
+  </script>
+</body>
+</html>
