@@ -67,10 +67,37 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   </style>
+
+  <!-- Add this line inside your <head> to load Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
 </head>
 
 <body class="h-full font-sans text-slate-800 antialiased flex bg-[#f8fafc] overflow-hidden">
+<!-- Login Form (Shown when logged out) -->
+<div id="auth-container" style="max-width: 380px; margin: 40px auto; padding: 24px; border: 1px solid #ccc; border-radius: 8px;">
+  <h3 style="text-align: center;">Team AI Workspace</h3>
 
+  <form id="magic-link-form">
+    <label style="display:block; margin-bottom: 6px; font-weight: bold; font-size: 14px;">Team Email Login</label>
+    <input type="email" id="email-input" placeholder="colleague@company.com" required style="width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box;">
+    <button type="submit" id="submit-btn" style="width: 100%; padding: 10px; background: #000; color: #fff; border: none; cursor: pointer;">Send Magic Link</button>
+  </form>
+
+  <div id="message" style="font-size: 13px; text-align: center; margin-top: 10px;"></div>
+
+  <div style="text-align: center; color: #888; font-size: 12px; margin: 16px 0;">OR</div>
+
+  <button id="github-btn" style="width: 100%; padding: 10px; background: #24292e; color: #fff; border: none; cursor: pointer;">Sign in with GitHub (Admin)</button>
+</div>
+
+<!-- Header / Sign Out Button (Shown when logged in) -->
+<div id="app-container" style="display: none;">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f0f0f0;">
+    <span id="user-email" style="font-size: 14px; font-weight: bold;"></span>
+    <button id="logout-btn" style="padding: 6px 12px; cursor: pointer;">Sign Out</button>
+  </div>
+</div>
   <div id="authGateOverlay" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 transition-opacity duration-300">
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border border-slate-200 relative overflow-hidden">
       <div class="text-center mb-6">
@@ -2364,5 +2391,84 @@ Format as clean HTML (using <strong>, <p>, and <ul>/<li> tags):
       if (!e.target.closest('#assigneeDropdownMenu') && !e.target.closest('button[onclick*="openAssigneeDropdown"]')) closeAssigneeDropdown();
     });
   </script>
+
+  <script>
+  // Replace with your keys from Supabase Dashboard -> Project Settings -> API
+  const SUPABASE_URL = "https://YOUR-PROJECT-ID.supabase.co";
+  const SUPABASE_ANON_KEY = "YOUR-ANON-KEY-HERE";
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const authContainer = document.getElementById("auth-container");
+  const appContainer = document.getElementById("app-container");
+  const userEmailSpan = document.getElementById("user-email");
+  const magicForm = document.getElementById("magic-link-form");
+  const emailInput = document.getElementById("email-input");
+  const submitBtn = document.getElementById("submit-btn");
+  const messageDiv = document.getElementById("message");
+  const githubBtn = document.getElementById("github-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+
+  // Check active session on load
+  async function checkSession() {
+    const { data: { session } } = await supabase.auth.getSession();
+    updateUI(session);
+  }
+
+  // React to auth state changes
+  supabase.auth.onAuthStateChange((_event, session) => {
+    updateUI(session);
+  });
+
+  function updateUI(session) {
+    if (session) {
+      authContainer.style.display = "none";
+      appContainer.style.display = "block";
+      userEmailSpan.textContent = `Logged in as: ${session.user.email}`;
+    } else {
+      authContainer.style.display = "block";
+      appContainer.style.display = "none";
+    }
+  }
+
+  // Handle Team Login via Magic Link
+  magicForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending link...";
+    messageDiv.textContent = "";
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: emailInput.value,
+      options: { emailRedirectTo: window.location.href },
+    });
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Send Magic Link";
+
+    if (error) {
+      messageDiv.style.color = "red";
+      messageDiv.textContent = error.message;
+    } else {
+      messageDiv.style.color = "green";
+      messageDiv.textContent = "Magic link sent! Check your inbox.";
+    }
+  });
+
+  // Handle Admin Login via GitHub
+  githubBtn.addEventListener("click", async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: window.location.href },
+    });
+  });
+
+  // Handle Sign Out
+  logoutBtn.addEventListener("click", async () => {
+    await supabase.auth.signOut();
+  });
+
+  checkSession();
+</script>
 </body>
 </html>
